@@ -1,0 +1,57 @@
+<!--
+ * @Description: html template for swagger ui when the server is not able to access the internet
+ * @version: 0.1.0
+ * @Author: 1746104160
+ * @Date: 2023-06-02 12:56:56
+ * @LastEditors: 1746104160 shaojiahong2001@outlook.com
+ * @LastEditTime: 2023-06-16 14:14:22
+ * @FilePath: /flask_restx_marshmallow/flask_restx_marshmallow/templates/local.html
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ title }}</title>
+  <link crossorigin rel="stylesheet" type="text/css" href="{{ swagger_static('swagger-ui.min.css') }}" />
+  <style rel="stylesheet" type="text/css">
+    html {
+      box-sizing: border-box;
+      overflow: -moz-scrollbars-vertical;
+      overflow-y: scroll;
+    }
+
+    *,
+    *:before,
+    *:after {
+      box-sizing: inherit;
+    }
+
+    body {
+      margin: 0;
+      background: #fafafa;
+    }
+  </style>
+  <link crossorigin href="{{ swagger_static('swagger_fav.png') }}" type="image/png" rel="shortcut icon" />
+  <link crossorigin href="{{ swagger_static('swagger_fav.png') }}" type="image/png" rel="icon" />
+</head>
+
+<body>
+  <div id="swagger-ui"></div>
+  <script crossorigin src="{{ swagger_static('swagger-ui-bundle.min.js') }}"></script>
+  <script crossorigin src="{{ swagger_static('swagger-ui-standalone-preset.min.js') }}"></script>
+  <script type="text/javascript">
+    window.onload = function () {
+      window.ui = SwaggerUIBundle({
+        url: "{{ specs_url }}",
+        dom_id: "#swagger-ui",
+        deepLinking: true,
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+        plugins: [SwaggerUIBundle.plugins.DownloadUrl],
+        layout: "StandaloneLayout",
+      });
+    };
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,65 @@
+[tool.poetry]
+name = "flask_restx_marshmallow"
+version = "0.1.0"
+description = "A successful practice combining flask_restx with marshmallow"
+authors = ["1746104160 <shaojiahong2001@outlook.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/1746104160/flask-restx-marshmallow"
+repository = "https://github.com/1746104160/flask-restx-marshmallow"
+keywords = ["flask", "flask_restx", "sqlalchemy", "marshmallow"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3 :: Only",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries",
+]
+include = [
+    "LICENSE",
+]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+Flask = "^2.3.2"
+flask-restx = "^1.1.0"
+SQLAlchemy = "^2.0.15"
+marshmallow = "^3.19.0"
+marshmallow-sqlalchemy = "^0.29.0"
+orjson = "^3.9.0"
+webargs = "^8.2.0"
+SQLAlchemy-Utils = "^0.41.1"
+sortedcontainers = "^2.4.0"
+Flask-SQLAlchemy = "^3.0.3"
+apispec = "^6.3.0"
+filetype = "^1.2.0"
+beautifulsoup4 = "^4.12.2"
+Flask-JWT-Extended = "^4.5.2"
+redis = "^4.5.5"
+requests = "^2.31.0"
+Flask-Caching = "^2.0.2"
+passlib = "^1.7.4"
+mysqlclient = "^2.1.1"
+
+[tool.poetry.dev-dependencies]
+pylint = "^2.17.4"
+black = "^23.3.0"
+mypy = "^1.3.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pylint]
+
+
+[tool.black]
+line-length = 80
