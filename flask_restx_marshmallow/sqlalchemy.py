@@ -1,6 +1,6 @@
 """
 Description: patched salalchemy of flask_restx_marshmallow
-version: 0.1.0
+version: 0.1.1
 Author: 1746104160
 Date: 2023-06-02 12:56:56
 LastEditors: 1746104160 shaojiahong2001@outlook.com

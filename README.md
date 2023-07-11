@@ -1,6 +1,6 @@
 <!--
  * @Description: README for flask_restx_marshmallow
- * @version: 0.1.0
+ * @version: 0.1.1
  * @Author: 1746104160
  * @Date: 2023-06-02 13:05:58
  * @LastEditors: 1746104160 shaojiahong2001@outlook.com
@@ -53,7 +53,7 @@ app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///test.db"
 api = Api(
     app,
-    version="0.1.0",
+    version="0.1.1",
     title="example API",
     description="api interface for example app",
 )

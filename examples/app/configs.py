@@ -1,10 +1,10 @@
 """
 Description: configs base for example app.
-version: 0.1.0
+version: 0.1.1
 Author: 1746104160
 Date: 2023-06-02 12:56:56
 LastEditors: 1746104160 shaojiahong2001@outlook.com
-LastEditTime: 2023-06-05 21:45:39
+LastEditTime: 2023-07-11 13:13:08
 FilePath: /flask_restx_marshmallow/examples/app/configs.py
 """
 # pylint: disable=invalid-name
@@ -13,6 +13,20 @@ from dataclasses import dataclass
 from datetime import timedelta
 from secrets import token_urlsafe
 from typing import Iterable
+
+import toml
+
+PROJECT_NAME: str = (
+    name
+    if os.path.exists("pyproject.toml")
+    and os.path.isfile("pyproject.toml")
+    and os.path.getsize("pyproject.toml") > 0
+    and (file := toml.load("pyproject.toml"))
+    and isinstance(tool := file.get("tool"), dict)
+    and isinstance(poetry := tool.get("poetry"), dict)
+    and isinstance(name := poetry.get("name"), str)
+    else os.path.basename(os.getcwd())
+)
 
 
 @dataclass

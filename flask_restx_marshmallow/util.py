@@ -1,6 +1,6 @@
 """
 Description: utils of flask_restx_marshmallow
-version: 0.1.0
+version: 0.1.1
 Author: 1746104160
 Date: 2023-06-02 12:56:56
 LastEditors: 1746104160 shaojiahong2001@outlook.com
@@ -75,9 +75,13 @@ except ModuleNotFoundError:
 
 
 class File(Field):
-    """
-    Author: 1746104160
-    msg: check file upload type
+    """parameter validation for file
+
+    Args:
+        mimetypes (Iterable[str], optional): accept mimetype or iterable mimetypes
+        like `image/png|image|image/*`. Defaults to None.
+        size (Union[int, float], optional): maximum size to upload. Defaults to None.
+        size_unit (str, optional): size unit like m|mb|M|MB|. Defaults to "MB".
     """
 
     default_error_messages: dict[str, str] = {
@@ -111,14 +115,6 @@ class File(Field):
         size_unit: str = "MB",
         **kwargs,
     ) -> None:
-        """initialize file type
-
-        Args:
-            mimetypes (Iterable[str], optional): accept mimetype or iterable mimetypes
-            like `image/png|image|image/*`. Defaults to None.
-            size (Union[int, float], optional): maximum size to upload. Defaults to None.
-            size_unit (str, optional): size unit like m|mb|M|MB|. Defaults to "MB".
-        """
         super().__init__(**kwargs)
         if mimetypes is not None:
             if isinstance(mimetypes, str):
@@ -166,7 +162,7 @@ class File(Field):
             if (res := filetype.guess(byte_value)) is not None
             else value.mimetype
         )
-        if getattr(self, "mimetypes") is not None and not any(
+        if getattr(self, "mimetypes", None) is not None and not any(
             re.match(
                 re.compile(mimetype, re.IGNORECASE),
                 file_mime,
@@ -176,7 +172,7 @@ class File(Field):
             raise self.make_error("invalid_mimetype", mimetype=value.mimetype)
 
         if (
-            getattr(self, "size") is not None
+            getattr(self, "size", None) is not None
             and len(value.stream.read()) > self.size
         ):
             raise self.make_error("invalid_size", text=self.size_text)
@@ -554,7 +550,7 @@ def ui_for(api: "flask_restx_marshmallow.Api") -> str | None:
 
 spec: APISpec = APISpec(
     title="flask_restx_marshmallow",
-    version="0.1.0",
+    version="0.1.1",
     openapi_version="3.0.2",
     plugins=[MarshmallowPlugin(schema_name_resolver=resolver)],
     info={"description": "flask_restx_marshmallow backend api"},

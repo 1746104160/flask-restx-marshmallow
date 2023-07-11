@@ -1,6 +1,6 @@
 """
 Description: user model
-version: 0.1.0
+version: 0.1.1
 Author: 1746104160
 Date: 2023-06-02 12:56:56
 LastEditors: 1746104160 shaojiahong2001@outlook.com
@@ -93,7 +93,6 @@ class Users(db.Model):
         )
 
     @classmethod
-    @permission_required("/system/route", optional=True)
     def add(
         cls,
         *,
@@ -217,6 +216,7 @@ class Users(db.Model):
         return cls.query.filter_by(name=username).one_or_none()
 
     @classmethod
+    @permission_required("/system/user")
     def get_all_users(
         cls,
         *,

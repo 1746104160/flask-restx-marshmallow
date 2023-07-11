@@ -1,6 +1,6 @@
 """
 Description: role model
-version: 0.1.0
+version: 0.1.1
 Author: 1746104160
 Date: 2023-06-02 12:56:56
 LastEditors: 1746104160 shaojiahong2001@outlook.com
@@ -72,7 +72,6 @@ class Roles(db.Model):
         )
 
     @classmethod
-    @permission_required("/system/role", optional=True)
     def add(
         cls,
         *,
@@ -170,7 +169,6 @@ class Roles(db.Model):
         return {"success": False, "message": "role does not exist"}
 
     @classmethod
-    @permission_required("/system/user")
     def get_role_by_role_name(cls, role_name: str) -> "Roles":
         """get role by role name
 

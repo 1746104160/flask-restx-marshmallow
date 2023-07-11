@@ -1,6 +1,6 @@
 """
 Description: route model
-version: 0.1.0
+version: 0.1.1
 Author: 1746104160
 Date: 2023-06-02 12:56:56
 LastEditors: 1746104160 shaojiahong2001@outlook.com
@@ -61,7 +61,6 @@ class Routes(db.Model):
         )
 
     @classmethod
-    @permission_required("/system/route", optional=True)
     def add(
         cls,
         name: str,
@@ -91,7 +90,6 @@ class Routes(db.Model):
             return {"success": False, "message": "route already exists"}
 
     @classmethod
-    @permission_required("/system/role")
     def get_route_by_route_name(cls, route_name: str) -> "Routes":
         """get route by route name
 
@@ -119,6 +117,7 @@ class Routes(db.Model):
         )
 
     @classmethod
+    @permission_required("/system/route")
     def get_all_routes(
         cls,
         *,

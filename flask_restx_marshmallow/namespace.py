@@ -1,6 +1,6 @@
 """
 Description: patched namespace of flask_restx_marshmallow
-version: 0.1.0
+version: 0.1.1
 Author: 1746104160
 Date: 2023-06-02 12:56:56
 LastEditors: 1746104160 shaojiahong2001@outlook.com
@@ -132,7 +132,14 @@ class Namespace(OriginalNamespace):
                                 except TypeError:
                                     pass
                             case "formData":
-                                new_data.update(request.form.to_dict())
+                                new_data.update(
+                                    {
+                                        key: value
+                                        if len(value) > 1
+                                        else value[0]
+                                        for key, value in request.form.lists()
+                                    }
+                                )
                                 new_data.update(
                                     {
                                         key: value
@@ -176,7 +183,9 @@ class Namespace(OriginalNamespace):
             return self.doc(params=params)(
                 self.response(code=HTTPStatus.UNPROCESSABLE_ENTITY)(
                     parser.use_args(
-                        params, location=location2webargs_location[location], as_kwargs=as_kwargs
+                        params,
+                        location=location2webargs_location[location],
+                        as_kwargs=as_kwargs,
                     )(func)
                 )
             )
