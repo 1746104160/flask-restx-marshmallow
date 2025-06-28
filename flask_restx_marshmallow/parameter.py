@@ -1,120 +1,199 @@
-"""
-Description: parameters of flask_restx_marshmallow
-version: 0.1.1
-Author: 1746104160
-Date: 2023-06-02 12:56:56
-LastEditors: 1746104160 shaojiahong2001@outlook.com
-LastEditTime: 2023-06-16 14:15:27
-FilePath: /flask_restx_marshmallow/flask_restx_marshmallow/parameter.py
-"""
-import importlib
-from dataclasses import dataclass
-from types import ModuleType
-from typing import Generator
+"""parameters of flask_restx_marshmallow."""
 
-from marshmallow import EXCLUDE, Schema, fields
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Literal, Self, Unpack, override
 
-from .util import ObjectDict
+from marshmallow.fields import Field, List, Tuple
+from marshmallow.schema import Schema
+from werkzeug.utils import cached_property
+
+from ._json import json
+from .enum import Location
+from .type import FieldLocations, SchemaInitKwargs
+from .util import get_location, set_location
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Set as AbstractSet
+
+    from marshmallow.fields import Field
 
 
 class Parameters(Schema):
-    """
-    Author: 1746104160
-    msg: Base Parameters
+    """Base Parameters.
+
+    Args:
+        location (Location, optional): location of the parameters. Defaults to None.
+        kwargs (dict): other key word arguments.
     """
 
-    @dataclass
+    description: str = "Request parameters"
+
     class Meta:
-        """
-        Author: 1746104160
-        msg: Meta for Parameters
-        """
+        """Meta for Parameters."""
 
-        unknown: str = EXCLUDE
+        unknown: str = "exclude"
+        render_module = json
 
     def __init__(
-        self, *, add_jwt: bool = False, location: str, **kwargs
+        self: Self,
+        *,
+        location: Location
+        | Literal["query", "header", "formData", "body", "cookie", "path"]
+        | None = None,
+        **kwargs: Unpack["SchemaInitKwargs"],
     ) -> None:
+        """Base Parameters.
+
+        Args:
+            location (Location, optional): location of the parameters. Defaults to None.
+            kwargs (dict): other key word arguments.
+        """
         super().__init__(**kwargs)
+        self.location: (
+            Location
+            | Literal["query", "header", "formData", "body", "cookie", "path"]
+            | None
+        ) = location
+        if location is not None:
+            self.default_location = Location(location)
         for field in self.fields.values():
             field.load_only = True
-            if not field.metadata.get("location"):
-                field.metadata["location"] = location
-        if add_jwt:
-            self.fields["jwt"] = fields.String(
-                metadata={"description": "JWT", "location": "query"}
+            if location is not None:
+                if isinstance(location, str):
+                    location = self.default_location
+                set_location(field, location)
+
+    @cached_property
+    def locations(self: Self) -> set[str]:
+        """Get locations.
+
+        Returns:
+            set[str]: locations
+        """
+        return {
+            get_location(field) or self.default_location
+            for field in self.fields.values()
+        }
+
+    @cached_property
+    def field_locations(self: Self) -> list[FieldLocations]:
+        """Get (field_name, location, is_multiple) for each non-body field.
+
+        Returns:
+            list[FieldLocations]: field name, location, is multiple
+        """
+        return [
+            FieldLocations(
+                name,
+                location or self.default_location,
+                isinstance(field, List | Tuple),
             )
-        try:
-            json: ModuleType = importlib.import_module("orjson")
-        except ModuleNotFoundError:
-            json = importlib.import_module("json")
-        self.opts.render_module = json
+            for name, field in self.fields.items()
+            if (location := get_location(field)) is not Location.BODY
+        ]
 
-    @property
-    def dict_class(self) -> type:
-        return ObjectDict
+    def __contains__(self: Self, field: str) -> bool:
+        """Whether field in self.fields.
 
-    def __contains__(self, field: str) -> bool:
+        Args:
+            field (str): field name
+
+        Returns:
+            bool: whether field in self.fields
+        """
         return field in self.fields
 
-    def items(self) -> Generator[tuple[str, dict], None, None]:
-        """
-        Author: 1746104160
-        msg: make dict
-        param {*} self
+    def items(self: Self) -> "Iterable[tuple[str, dict]]":
+        """Make dict.
+
+        Yields:
+            tuple[str, dict]: field name and field dict
         """
         for key, value in self.fields.items():
             yield key, value.__dict__
 
-    def __setitem__(self, key: str, value: fields.Field) -> None:
+    def __setitem__(self: Self, key: str, value: "Field") -> None:
+        """Set item."""
         self.fields[key] = value
 
+    def copy_body_fields(self: Self) -> "Parameters":
+        """Return a copy of this schema with only fields that location is body."""
+        return Parameters.from_dict(
+            dict(
+                filter(
+                    lambda field: get_location(field[1]) is Location.BODY,
+                    self.fields.items(),
+                ),
+            ),
+            name=f"{type(self).__name__}Body",
+        )(location=Location.BODY)
 
-class QueryParameters(Parameters):
-    """
-    Author: 1746104160
-    msg: query parameters
-    """
+    def copy_form_fields(self: Self) -> "Parameters":
+        """Return a copy of this schema with only fields that location is formdata."""
+        return Parameters.from_dict(
+            dict(
+                filter(
+                    lambda field: get_location(field[1]) is Location.FORM_DATA,
+                    self.fields.items(),
+                ),
+            ),
+            name=f"{type(self).__name__}Form",
+        )(location=Location.FORM_DATA)
 
-    def __init__(self, **kwargs) -> None:
-        super().__init__(location="query", **kwargs)
+    def combine(self: Self, other: "Parameters") -> "Parameters":
+        """Combine two schemas.
 
+        Args:
+            other (Self): other schema
 
-class PostFormParameters(Parameters):
-    """
-    Author: 1746104160
-    msg: form parameters
-    """
+        Returns:
+            Self: combined schema
+        """
+        return self.from_dict(other.fields, name=other.__class__.__name__)(
+            location=other.location,
+        )
 
-    def __init__(self, **kwargs) -> None:
-        super().__init__(location="formData", **kwargs)
+    def __or__(self, other: "Parameters") -> "Parameters":
+        """Combine two schemas.
 
+        Args:
+            other (Self): other schema
 
-class JSONParameters(Parameters):
-    """
-    Author: 1746104160
-    msg: json parameters
-    """
+        Returns:
+            Self: combined schema
+        """
+        return self.from_dict(other.fields, name=other.__class__.__name__)(
+            location=other.location,
+        )
 
-    def __init__(self, **kwargs) -> None:
-        super().__init__(location="body", **kwargs)
+    if TYPE_CHECKING:
 
+        @override
+        def load[T](
+            self: Self,
+            data: Mapping[str, T] | Iterable[Mapping[str, T]],
+            *,
+            many: bool | None = None,
+            partial: bool | Sequence[str] | AbstractSet[str] | None = None,
+            unknown: str | None = None,
+        ) -> dict: ...
+        @override
+        def loads(
+            self: Self,
+            json_data: str,
+            *,
+            many: bool | None = None,
+            partial: bool | Sequence[str] | AbstractSet[str] | None = None,
+            unknown: str | None = None,
+            **kwargs,  # noqa: ANN003
+        ) -> dict: ...
 
-class CookieParameters(Parameters):
-    """
-    Author: 1746104160
-    msg: cookie parameters
-    """
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(location="cookie", **kwargs)
-
-
-class HeaderParameters(Parameters):
-    """
-    Author: 1746104160
-    msg: header parameters
-    """
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(location="header", **kwargs)
+        @override
+        @classmethod
+        def from_dict[T: Field](
+            cls,
+            fields: dict[str, T],
+            *,
+            name: str = "GeneratedSchema",
+        ) -> type["Parameters"]: ...

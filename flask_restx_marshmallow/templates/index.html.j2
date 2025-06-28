@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ title }}</title>
+  <link crossorigin rel="stylesheet" type="text/css" href="{{ base_url }}/swagger-ui.min.css" />
+  <style rel="stylesheet" type="text/css">
+    html {
+      box-sizing: border-box;
+      overflow: -moz-scrollbars-vertical;
+      overflow-y: scroll;
+    }
+
+    *,
+    *:before,
+    *:after {
+      box-sizing: inherit;
+    }
+
+    body {
+      margin: 0;
+      background: #fafafa;
+    }
+  </style>
+  <link crossorigin href="//static1.smartbear.co/swagger/media/assets/swagger_fav.png" type="image/png"
+    rel="shortcut icon" />
+  <link crossorigin href="//static1.smartbear.co/swagger/media/assets/swagger_fav.png" type="image/png" rel="icon" />
+</head>
+
+<body>
+  <div id="swagger-ui"></div>
+  <script crossorigin src="{{ base_url }}/swagger-ui-bundle.min.js"></script>
+  <script crossorigin src="{{ base_url }}/swagger-ui-standalone-preset.min.js"></script>
+  <script type="text/javascript">
+    function getToken() {
+      return new URLSearchParams(window.location.search).get('jwt');
+    }
+    function getCSRFToken() {
+      return document.cookie.split(';').find((cookie) => cookie.trim().startsWith("{{ csrf_token_cookie_name }}"))?.split('=')[1];
+    }
+    window.onload = function () {
+      window.ui = SwaggerUIBundle({
+        url: "{{ specs_url }}?jwt=" + getToken(),
+        dom_id: "#swagger-ui",
+        deepLinking: true,
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+        plugins: [SwaggerUIBundle.plugins.DownloadUrl],
+        layout: "StandaloneLayout",
+        requestInterceptor: (request) => {
+          if (csrf_token = getCSRFToken()) {
+            request.headers['X-CSRFToken'] = csrf_token;
+          }
+          return request;
+        },
+        requestSnippetsEnabled: true,
+        withCredentials: true,
+      });
+    };
+  </script>
+</body>
+
+</html>

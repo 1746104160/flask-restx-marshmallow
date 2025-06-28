@@ -1,30 +1,65 @@
 {
-  "fileheader.customMade": {
-    "Description": "flask_restx_marshmallow",
-    "version": "0.1.1",
-    "Author": "1746104160",
-    "Date": "Do not edit",
-    "LastEditors": "1746104160 shaojiahong2001@outlook.com",
-    "LastEditTime": "Do not Edit",
-    "FilePath": "Do not edit"
-  },
-  "fileheader.cursorMode": {
-    "Author": "1746104160",
-    "description": "",
-    "param": "\r\n"
-  },
   "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter",
     "editor.formatOnSave": true,
+    "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.codeActionsOnSave": {
-        "source.organizeImports": true
-    },
+      "source.fixAll": "explicit",
+      "source.organizeImports": "explicit"
+    }
   },
-  "pylint.args": [
-    "-j 0",
+  "python.analysis.autoFormatStrings": true,
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.completeFunctionParens": true,
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.exclude": [
+    "dist",
+    "**/site-packages/**", // Exclude installed packages
+    "**/venv/**", // Exclude virtual environments
+    "**/.venv/**", // Exclude virtual envs with .venv naming
+    "**/__pycache__/**", // Exclude Python cache files
+    "**/.git/**", // Exclude Git repository files
+    "**/.vscode/**", // Exclude VS Code workspace settings
+    ".pytest_cache", // Exclude pytest cache
+    ".ruff_cache" // Exclude ruff cache
   ],
-  "python.formatting.provider": "black",
-  "python.formatting.blackArgs": ["--config", "${workspaceFolder}/pyproject.toml"],
-  "python.analysis.typeCheckingMode": "off",
-  "isort.args":["--profile", "black"],
+  "python.analysis.extraCommitChars": true,
+  "python.analysis.fixAll": [
+    "source.convertImportFormat",
+  ],
+  "python.analysis.generateWithTypeAnnotation": true,
+  "python.analysis.indexing": true,
+  "python.analysis.inlayHints.callArgumentNames": "all",
+  "python.analysis.inlayHints.functionReturnTypes": true,
+  "python.analysis.inlayHints.variableTypes": true,
+  "python.analysis.languageServerMode": "full",
+  "python.analysis.logLevel": "Trace",
+  "python.analysis.packageIndexDepths": [
+    {
+      "depth": 0,
+      "name": "ctypes"
+    },
+    {
+      "depth": 0,
+      "name": "ast"
+    },
+    {
+      "depth": 2,
+      "name": "flask"
+    },
+  ],
+  "python.analysis.showOnlyDirectDependenciesInAutoImport": true,
+  "python.analysis.supportDocstringTemplate": true,
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.typeEvaluation.deprecateTypingAliases": true,
+  "python.analysis.typeEvaluation.disableBytesTypePromotions": true,
+  "python.analysis.typeEvaluation.enableExperimentalFeatures": false,
+  "python.analysis.typeEvaluation.enableReachabilityAnalysis": true,
+  "python.analysis.typeEvaluation.strictDictionaryInference": true,
+  "python.analysis.typeEvaluation.strictListInference": true,
+  "python.analysis.typeEvaluation.strictSetInference": true,
+  "python.analysis.userFileIndexingLimit": -1,
+  "python.createEnvironment.contentButton": "show",
+  "python.defaultInterpreterPath": ".venv/bin/python",
+  "python.languageServer": "Pylance",
+  "python.testing.pytestEnabled": true,
 }

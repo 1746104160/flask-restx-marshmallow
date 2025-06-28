@@ -1,0 +1,120 @@
+site_name: Flask RESTX Marshmallow Docs
+site_description: Documentation for Flask RESTX Marshmallow, a library that integrates Flask-RESTx with Marshmallow for easy API development.
+site_url: https://1746104160.github.io/flask-restx-marshmallow/
+repo_url: https://github.com/1746104160/flask-restx-marshmallow
+repo_name: 1746104160/flask-restx-marshmallow
+site_dir: site
+watch: [mkdocs.yml, README.md, flask_restx_marshmallow]
+copyright: Copyright &copy; 2023 1746104160
+nav:
+  - Home:
+      - Overview: index.md
+      - License: license.md
+  - API Reference:
+      - Overview: flask_restx_marshmallow.md
+      - api: api.md
+      - enum: enum.md
+      - namespcace: namespace.md
+      - parameter: parameter.md
+      - schema: schema.md
+      - swagger: swagger.md
+      - type: type.md
+      - util: util.md
+      - Example: example.md
+  - Example:
+      - Python Example: example_python.md
+      - Swagger Document: example_pic.md
+      - Swagger JSON: example_json.md
+
+theme:
+  name: material
+  logo: logo.svg
+  features:
+    - announce.dismiss
+    - content.action.edit
+    - content.action.view
+    - content.code.annotate
+    - content.code.copy
+    - content.tooltips
+    - navigation.footer
+    - navigation.instant.preview
+    - navigation.path
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: purple
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: lime
+      toggle:
+        icon: material/weather-night
+        name: Switch to system preference
+markdown_extensions:
+  - attr_list
+  - admonition
+  - callouts:
+      strip_period: false
+  - footnotes
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      pygments_lang_class: true
+  - pymdownx.magiclink
+  - pymdownx.snippets:
+      base_path: [!relative $config_dir]
+      check_paths: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+  - toc:
+      permalink: "¤"
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            backlinks: tree
+            inherited_members: true
+            merge_init_into_class: true
+            parameter_headings: true
+            separate_signature: true
+            show_root_heading: true
+            show_signature_annotations: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            signature_crossrefs: true
+          paths: [.]
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/1746104160/flask-restx-marshmallow
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/flask-restx-marshmallow

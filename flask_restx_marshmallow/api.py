@@ -1,200 +1,162 @@
-"""
-Description: patched api of flask_restx_marshmallow
-version: 0.1.1
-Author: 1746104160
-Date: 2023-06-02 12:56:56
-LastEditors: 1746104160 shaojiahong2001@outlook.com
-LastEditTime: 2023-06-04 21:38:24
-FilePath: /flask_restx_marshmallow/flask_restx_marshmallow/api.py
-"""
-import importlib
-from dataclasses import dataclass
-from http import HTTPStatus
-from types import ModuleType
-from typing import Optional
+"""patched api of flask_restx_marshmallow."""
 
-from flask import Blueprint, Flask, Response, abort, current_app, jsonify
-from flask_restx import Api as OriginalApi
-from marshmallow.exceptions import ValidationError
-from typing_extensions import override
-from werkzeug.exceptions import (
-    UnprocessableEntity as originalUnprocessableEntity,
-)
+from collections.abc import Callable
+from pathlib import Path
+from typing import TYPE_CHECKING, Self, cast, override
+
+from flask import abort, current_app
+from flask.blueprints import Blueprint
+from flask.helpers import url_for
+from flask_restx.api import Api as OriginalApi
+from werkzeug.exceptions import BadRequest, InternalServerError, UnprocessableEntity
 from werkzeug.utils import cached_property
 
-from .namespace import Namespace
-from .swagger import Swagger
-from .util import apidoc, permission_required, ui_for
+from flask_restx_marshmallow.swagger import Swagger
+from flask_restx_marshmallow.util import (
+    Request,
+    Response,
+    handle_invalid_json_error,
+    handle_validation_error,
+    output_json,
+    render_swagger_json,
+    render_swagger_ui,
+)
 
 try:
-    json: ModuleType = importlib.import_module("orjson")
-except ModuleNotFoundError:
-    json = importlib.import_module("json")
+    from loguru import logger
+except ImportError:
+    from logging import getLogger
+
+    logger = getLogger(__name__)
+
+if TYPE_CHECKING:
+    from flask.app import Flask
+
+    from .namespace import Namespace
+    from .type import OpenAPI, TupleResponse
 
 
 class Api(OriginalApi):
-    """
-    Author: 1746104160
-    msg: Patched API
-    """
+    """Patched API."""
+
+    _swagger_auth_decorator = None
+    if TYPE_CHECKING:
+        namespaces: list[Namespace]
+        blueprint: Blueprint
 
     @cached_property
-    def __schema__(self) -> dict:
-        """The Swagger specifications/schema for this API"""
-        if not self._schema:
-            self._schema: dict = Swagger(self).as_dict()
-        return self._schema
-
-    def init_app(self, app: Flask | Blueprint, **kwargs) -> None:
-        """Add handle error
-
-        Args:
-            app (Union[Flask, Blueprint]): app instance
-        """
-        super().init_app(app, **kwargs)
-        app.errorhandler(HTTPStatus.UNPROCESSABLE_ENTITY.value)(
-            handle_validation_error
-        )
-
-    @override
-    def _register_apidoc(self, app: Flask) -> None:
-        """disable original function for registering apidoc"""
-
-    @override
-    def render_doc(self) -> str | None:
-        """render doc"""
-        if self._doc_view:
-            return self._doc_view()
-        if not self._doc:
-            abort(HTTPStatus.NOT_FOUND)
-        return ui_for(self)
-
-    @override
-    def handle_error(self, e: Exception) -> Response:
-        """handle error
-
-        Args:
-            e (Exception): exception
+    def __schema__(self: Self) -> "OpenAPI":
+        """The Swagger specifications/schema for this API.
 
         Raises:
-            e: exception
+            ValueError: Unable to render schema
 
         Returns:
-            Response: flask response
+            OpenAPI: swagger
         """
-        for val in current_app.error_handler_spec.values():
-            for handler in val.values():
-                registered_error_handlers: list[type[Exception]] = list(
-                    filter(lambda x: isinstance(e, x), handler.keys())
-                )
-                if len(registered_error_handlers) > 0:
-                    raise e
-        return super().handle_error(e)
+        if not self._schema:
+            try:
+                self._schema = Swagger(self).as_dict()
+            except Exception as exc:
+                msg = "Unable to render schema"
+                logger.exception(msg)
+                raise ValueError(msg) from exc
+        return self._schema
 
     @override
-    def namespace(self, *args, **kwargs) -> Namespace:
-        """The only purpose of this method is to pass a custom Namespace class
+    def render_doc(self: Self) -> str:
+        """Render doc.
 
         Returns:
-            Namespace: namespace
+            str: rendered doc
         """
-        _namespace: Namespace = Namespace(*args, **kwargs)
-        self.add_namespace(_namespace)
-        return _namespace
+        if (
+            self._swagger_auth_decorator is None
+            or current_app.config.get("DEBUG") is True
+        ):
+            return render_swagger_ui(self)
+        return cast(
+            "str",
+            self._swagger_auth_decorator(render_swagger_ui)(self),
+        )
+
+    def render_json(self: Self) -> str | bytes:
+        """Render swagger json doc.
+
+        Returns:
+            str: rendered json
+        """
+        if (
+            self._swagger_auth_decorator is None
+            or current_app.config.get("DEBUG") is True
+        ):
+            return render_swagger_json(self)
+        return cast(
+            "str | bytes",
+            self._swagger_auth_decorator(render_swagger_json)(self),
+        )
 
     @override
-    def _register_doc(self, _app_or_blueprint: Flask | Blueprint) -> None:
-        """disable original function for registering doc"""
+    def _register_apidoc(self: Self, app: "Flask") -> None:
+        conf: dict = app.extensions.setdefault("restx", {})
+        if not conf.get("apidoc_registered"):
+            app.register_blueprint(apidoc, url_prefix="/swagger")
+        conf["apidoc_registered"] = True
 
     @override
-    def _register_specs(self, app_or_blueprint: Flask | Blueprint) -> None:
-        """disable original function for registering spec"""
+    def _register_specs(self: Self, app_or_blueprint: "Flask | Blueprint") -> None:
+        if self._add_specs:
+            app_or_blueprint.add_url_rule(
+                f"/{self.default_swagger_filename}",
+                "specs",
+                self.render_json,
+            )
 
-    def register_doc_production(
+    @override
+    def _register_doc(self: Self, app_or_blueprint: "Flask | Blueprint") -> None:
+        if self._add_specs and self._doc:
+            app_or_blueprint.add_url_rule(self._doc, "doc", self.render_doc)
+        app_or_blueprint.add_url_rule(self._doc, "root", abort)
+
+    @override
+    def init_app(self: Self, app: "Flask", **kwargs) -> None:  # noqa: ANN003
+        super().init_app(app, **kwargs)
+        self.error_handlers: dict[type[Exception], Callable[[], TupleResponse]] = {}
+        self.error_handlers[BadRequest] = handle_invalid_json_error
+        self.error_handlers[UnprocessableEntity] = handle_validation_error
+        self.error_handlers[InternalServerError] = lambda: None  # type: ignore[assignment]
+
+    @override
+    def _init_app(self: Self, app: "Flask") -> None:
+        super()._init_app(app)
+        self.representations["application/json"] = output_json
+        app.response_class = Response
+        app.request_class = Request
+
+    def auth_render_swagger[T](
         self,
-        app: Flask,
-        blueprint: Optional[Blueprint] = None,
-        authed_route: Optional[str] = "/system",
+        func: Callable[[Callable[["Api"], str | bytes]], Callable[["Api"], T]],
     ) -> None:
-        """register swagger documentation
-
-        Args:
-            app (Flask): app instance
-            blueprint (Blueprint, optional): blueprint instance. Defaults to None.
-            authed_route (str, optional): authed route. Defaults to "/system".
-        """
-        assert isinstance(authed_route, str)
-        app.register_blueprint(apidoc)
-        app_or_blueprint: Blueprint | Flask = blueprint if blueprint else app
-        app_or_blueprint.add_url_rule(
-            self._doc,
-            "doc",
-            permission_required(authed_route)(self.render_doc),
-        )
-        app_or_blueprint.add_url_rule(
-            self.prefix or "/",
-            "root",
-            permission_required(authed_route)(self.render_root),
-        )
-        app_or_blueprint.add_url_rule(
-            "/" + self.default_swagger_filename,
-            "specs",
-            permission_required(authed_route)(
-                lambda: json.dumps(self.__schema__)
-            ),
-        )
-
-    def register_doc(
-        self, app: Flask, blueprint: Optional[Blueprint] = None
-    ) -> None:
-        """register swagger documentation
-
-        Args:
-            app (Flask): app instance
-            blueprint (Blueprint, optional): blueprint instance. Defaults to None.
-        """
-        app.register_blueprint(apidoc)
-        app_or_blueprint: Blueprint | Flask = blueprint if blueprint else app
-        app_or_blueprint.add_url_rule(
-            self._doc,
-            "doc",
-            self.render_doc,
-        )
-        app_or_blueprint.add_url_rule(
-            self.prefix or "/", "root", self.render_root
-        )
-        app_or_blueprint.add_url_rule(
-            "/" + self.default_swagger_filename,
-            "specs",
-            lambda: json.dumps(self.__schema__),
-        )
+        """Add decorator to render swagger ui."""
+        self._swagger_auth_decorator = func
 
 
-@dataclass
-class UnprocessableEntity(originalUnprocessableEntity):
-    """
-    Author: 1746104160
-    msg: util class for typing unprocessable entities
-    """
-
-    exc: ValidationError
+apidoc = Blueprint(
+    "swagger_doc",
+    __name__,
+    template_folder=str(Path(__file__).parent / "templates"),
+    static_folder=str(Path(__file__).parent / "static"),
+)
 
 
-def handle_validation_error(err: UnprocessableEntity) -> Response:
-    """Return validation errors as JSON
+@apidoc.add_app_template_global
+def swagger_static(filename: str) -> str:
+    """Swagger static file.
 
     Args:
-        err (UnprocessableEntity): exception
+        filename (str): filename
 
     Returns:
-        Response: response for unprocessable entity
+        str: url path
     """
-    res: Response = jsonify(
-        {
-            "code": HTTPStatus.UNPROCESSABLE_ENTITY.value,
-            "message": err.exc.messages,
-            "success": False,
-        }
-    )
-    res.status_code = HTTPStatus.UNPROCESSABLE_ENTITY.value
-    return res
+    return url_for("swagger_doc.static", filename=filename)

@@ -1,95 +1,59 @@
-'''
-Description: 艺术集散地
-version: 1.0.0
-Author: 邵佳泓
-Date: 2023-06-23 10:39:57
-LastEditors: 1746104160 shaojiahong2001@outlook.com
-LastEditTime: 2023-07-11 12:50:16
-FilePath: /flask_restx_marshmallow/tests/test_swagger.py
-'''
-from typing import NoReturn
+"""Test swagger doc."""
 
-from flask import Flask, url_for
-from flask.testing import FlaskClient
-from flask_jwt_extended import create_access_token
-from werkzeug.datastructures import Headers
-from werkzeug.test import TestResponse
+from collections.abc import Callable
+from functools import wraps
+from http import HTTPStatus
+from typing import TYPE_CHECKING
 
-from examples.app.models.users import Users
-from examples.app.utils import db
+from flask import request, url_for
+
+if TYPE_CHECKING:
+    from flask import Flask
+    from flask.testing import FlaskClient
+
+    from flask_restx_marshmallow.api import Api
 
 
-def test_swagger_json(
-    app: Flask,
-    client: FlaskClient,
-) -> NoReturn:
-    """test swagger doc"""
-    if app.config["DEVELOPING"]:
-        resp: TestResponse = client.get(url_for("api.specs"))
-        assert resp.status_code == 200
-    else:
-        resp = client.get(
-            url_for("api.specs"),
-        )
-        assert resp.status_code == 401
-        admin = Users.get_user_by_username("administrator")
-        accessToken = create_access_token(admin)
-        resp = client.get(
-            url_for("api.specs"),
-            headers=Headers({"Authorization": f"Bearer {accessToken}"}),
-        )
-        assert resp.status_code == 200
-        normal = Users.get_user_by_username("normal")
-        accessToken = create_access_token(normal)
-        if normal.valid is True:
-            resp = client.get(
-                url_for("api.specs"),
-                headers=Headers({"Authorization": f"Bearer {accessToken}"}),
-            )
-            assert resp.status_code == 403
-            normal.valid = True
-            db.session.commit()
-        else:
-            resp = client.get(
-                url_for("api.specs"),
-                headers=Headers({"Authorization": f"Bearer {accessToken}"}),
-            )
-            assert resp.status_code == 401
+def swagger_auth_decorator_test[**P](
+    func: Callable[P, str | bytes],
+) -> Callable[P, str | bytes | tuple[str | bytes, HTTPStatus]]:
+    """Decorator function.
+
+    Returns:
+        Callable: A wrapper function that takes the same arguments as the
+            original function.
+    """
+
+    @wraps(func)
+    def wrapper(
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> str | bytes | tuple[str | bytes, HTTPStatus]:
+        """Wrapper function.
+
+        Returns:
+            str | bytes: The result of the function call.
+        """
+        if request.headers.get("Authorization") != "Bearer test_token":
+            return "Unauthorized", HTTPStatus.UNAUTHORIZED
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
-def test_swagger_html(
-    app: Flask,
-    client: FlaskClient,
-) -> NoReturn:
-    """test swagger doc"""
-    if app.config["DEVELOPING"]:
-        resp: TestResponse = client.get(url_for("api.doc"))
-        assert resp.status_code == 200
-    else:
-        resp = client.get(
-            url_for("api.doc"),
-        )
-        assert resp.status_code == 401
-        admin = Users.get_user_by_username("administrator")
-        accessToken = create_access_token(admin)
-        resp = client.get(
-            url_for("api.doc"),
-            headers=Headers({"Authorization": f"Bearer {accessToken}"}),
-        )
-        assert resp.status_code == 200
-        normal = Users.get_user_by_username("normal")
-        accessToken = create_access_token(normal)
-        if normal.valid is True:
-            resp = client.get(
-                url_for("api.doc"),
-                headers=Headers({"Authorization": f"Bearer {accessToken}"}),
-            )
-            assert resp.status_code == 403
-            normal.valid = True
-            db.session.commit()
-        else:
-            resp = client.get(
-                url_for("api.doc"),
-                headers=Headers({"Authorization": f"Bearer {accessToken}"}),
-            )
-            assert resp.status_code == 401
+def test_swagger_with_debug(app: "Flask", api: "Api", client: "FlaskClient") -> None:
+    """Test swagger doc."""
+    api.auth_render_swagger(swagger_auth_decorator_test)
+    app.config["DEBUG"] = True
+    response = client.get(url_for("specs"))
+    assert response.status_code == HTTPStatus.OK
+
+
+def test_swagger_without_debug(
+    api: "Api",
+    client: "FlaskClient",
+) -> None:
+    """Test swagger doc without debug mode."""
+    api.auth_render_swagger(swagger_auth_decorator_test)
+    response = client.get(url_for("specs"))
+    assert response.status_code == HTTPStatus.UNAUTHORIZED

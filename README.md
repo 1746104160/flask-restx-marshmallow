@@ -1,21 +1,28 @@
-<!--
- * @Description: README for flask_restx_marshmallow
- * @version: 0.1.1
- * @Author: 1746104160
- * @Date: 2023-06-02 13:05:58
- * @LastEditors: 1746104160 shaojiahong2001@outlook.com
- * @LastEditTime: 2023-06-16 18:04:55
- * @FilePath: /flask_restx_marshmallow/README.md
--->
 # Flask-RESTX-marshmallow
 
-Flask-RESTX-marshmallow is an extension for [Flask](https://flask.palletsprojects.com/en/latest/) and [Flask-RESTX](https://flask-restx.readthedocs.io/en/latest/), which is a successful practice combining flask_restx with marshmallow.
+[![PyPI version](https://badge.fury.io/py/flask-restx-marshmallow.svg)](https://badge.fury.io/py/flask-restx-marshmallow)
+[![Python version](https://img.shields.io/pypi/pyversions/flask-restx-marshmallow.svg)](https://pypi.org/project/flask-restx-marshmallow/)
+[![License](https://img.shields.io/pypi/l/flask-restx-marshmallow.svg)](https://github.com/1746104160/flask-restx-marshmallow/blob/main/LICENSE)
 
-## Compatibility
+Flask-RESTX-marshmallow is a powerful extension that seamlessly combines [Flask](https://flask.palletsprojects.com/en/latest/), [Flask-RESTX](https://flask-restx.readthedocs.io/en/latest/), and [Marshmallow](https://marshmallow.readthedocs.io/en/stable/) to provide a robust foundation for building RESTful APIs with automatic documentation and data validation.
 
-Flask-RESTX-marshmallow requires Python 3.10+.
+## ✨ Features
 
-## Installation
+- 🚀 **Seamless Integration**: Combines Flask-RESTX's API documentation with Marshmallow's powerful serialization
+- 📋 **Automatic Documentation**: Generate interactive Swagger/OpenAPI documentation automatically
+- 🔍 **Data Validation**: Built-in request/response validation using Marshmallow schemas
+- 🎯 **Type Safety**: Full type hint support for better development experience
+- 🔧 **Easy Configuration**: Minimal setup required to get started
+- 📦 **SQLAlchemy Integration**: Works perfectly with Flask-SQLAlchemy
+
+## 🔧 Requirements
+
+- Python 3.12+
+- Flask 3.1+
+- Flask-RESTX 1.3+
+- Marshmallow 4.0+
+
+## 📦 Installation
 
 Install the extension with pip:
 
@@ -29,121 +36,93 @@ or with poetry:
 poetry add flask-restx-marshmallow
 ```
 
-## Quickstart
+or with uv
 
-With Flask-RESTX-marshmallow, you only import the api instance to route and document your endpoints.
-
-```python
-import uuid
-
-import sqlalchemy as sa
-from flask import Flask
-from marshmallow import fields, post_load
-
-from flask_restx_marshmallow import (
-    Api,
-    JSONParameters,
-    QueryParameters,
-    Resource,
-    SQLAlchemy,
-    StandardSchema,
-)
-
-app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///test.db"
-api = Api(
-    app,
-    version="0.1.1",
-    title="example API",
-    description="api interface for example app",
-)
-db = SQLAlchemy(app)
-ns = api.namespace("example", description="example operations")
-
-
-class Task(db.Model):
-    id = db.Column(db.String(32), primary_key=True)
-    task = db.Column(db.String(80))
-
-    def __init__(self, id, task):
-        self.id = id.hex
-        self.task = task
-
-    def __repr__(self):
-        return "<Task %r>" % self.task
-
-
-class QueryTaskParameters(QueryParameters):
-    id = fields.UUID(metadata={"description": "The task unique identifier"})
-
-    @post_load
-    def process(self, data, **_kwargs):
-        if "id" in data:
-            return {"data": Task.query.filter_by(id=data["id"].hex).first()}
-        return {"code": 1, "message": "id is required", "success": False}
-
-
-class CreateTaskParameters(JSONParameters):
-    task = fields.String(
-        required=True, metadata={"description": "The task details"}
-    )
-
-    @post_load
-    def process(self, data, **_kwargs):
-        try:
-            task = Task(id=uuid.uuid4(), task=data["task"])
-            db.session.add(task)
-        except sa.exc.IntegrityError as e:
-            db.session.rollback()
-            return {"code": 1, "message": str(e), "success": False}
-        else:
-            db.session.commit()
-            return {
-                "message": f"create task success with id {uuid.UUID(task.id)}"
-            }
-
-
-class TaskSchema(StandardSchema):
-    data = fields.Nested(
-        {
-            "id": fields.UUID(
-                metadata={"description": "The task unique identifier"},
-            ),
-            "task": fields.String(metadata={"description": "The task details"}),
-        }
-    )
-
-
-@ns.route("/")
-class TaskManage(Resource):
-    """task manage"""
-
-    @ns.parameters(params=QueryTaskParameters(), location="query")
-    @ns.response(
-        code=200,
-        description="query task by id",
-        model=TaskSchema(message="query task success"),
-    )
-    def get(self, task):
-        """query task by id"""
-        return task
-
-    @ns.parameters(params=CreateTaskParameters(), location="body")
-    @ns.response(
-        code=200,
-        description="create a new task",
-        model=None,
-        name="CreateSchema",
-        message="create successfully",
-    )
-    def post(self, res):
-        """create a new task"""
-        return res
-
-
-if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
-    api.register_doc(app)
-    app.run(debug=True)
+```bash
+uv add flask-restx-marshmallow
 ```
+
+## 🚀 Quick Start
+
+### Complete Example
+
+For a comprehensive example with SQLAlchemy integration, see `app.py`. This example demonstrates:
+
+- RESTful API endpoints with full CRUD operations
+- Automatic request/response validation
+- Interactive Swagger documentation
+- Database integration with Flask-SQLAlchemy
+- Error handling and status codes
+
+The example application provides these endpoints:
+
+| Endpoint         | Method | Description                                    |
+| ---------------- | ------ | ---------------------------------------------- |
+| `/tasks/`        | GET    | Query all tasks with optional filtering        |
+| `/tasks/`        | POST   | Create a new task                              |
+| `/tasks/<id>`    | GET    | Retrieve a specific task by ID                 |
+| `/tasks/<id>`    | PATCH  | Update a task partially                        |
+| `/tasks/<id>`    | DELETE | Delete a task by ID                            |
+
+## 🏃‍♂️ Running the Example
+
+1. Clone the repository:
+
+    ```
+    git clone https://github.com/1746104160/flask-restx-marshmallow.git && cd flask-restx-marshmallow
+    ```
+
+2. Install dependencies:
+
+    ```
+    poetry install --with dev
+    ```
+    or
+    ```
+    uv sync --dev
+    ```
+
+3. Run the example application:
+
+    ```
+    python app.py
+    ```
+    or
+    ```
+    flask run
+    ```
+
+4. Visit `http://localhost:5000` to explore the interactive API documentation.
+
+## 📚 Documentation
+
+Visit the interactive API documentation when running your application to explore all available endpoints and schemas. The documentation is automatically generated from your code and provides:
+
+- **Interactive API testing**: Try out endpoints directly from the browser
+- **Schema visualization**: See request/response models with examples
+- **Parameter documentation**: Understand required and optional parameters
+- **Error responses**: Learn about possible error scenarios
+
+## 🧪 Testing
+
+Run the test suite:
+
+```bash
+pytest
+```
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🔗 Links
+
+- [GitHub Repository](https://github.com/1746104160/flask-restx-marshmallow)
+- [PyPI Package](https://pypi.org/project/flask-restx-marshmallow/)
+- [Flask Documentation](https://flask.palletsprojects.com/)
+- [Flask-RESTX Documentation](https://flask-restx.readthedocs.io/)
+- [Marshmallow Documentation](https://marshmallow.readthedocs.io/)
+
+## ⭐ Star History
+
+If you find this project useful, please consider giving it a star on GitHub!

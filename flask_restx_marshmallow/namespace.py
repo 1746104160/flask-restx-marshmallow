@@ -1,281 +1,339 @@
-"""
-Description: patched namespace of flask_restx_marshmallow
-version: 0.1.1
-Author: 1746104160
-Date: 2023-06-02 12:56:56
-LastEditors: 1746104160 shaojiahong2001@outlook.com
-LastEditTime: 2023-06-04 21:38:50
-FilePath: /flask_restx_marshmallow/flask_restx_marshmallow/namespace.py
-"""
+"""patched namespace of flask_restx_marshmallow."""
+
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import is_dataclass
 from functools import wraps
 from http import HTTPStatus
-from types import FunctionType
-from typing import Optional
+from typing import TYPE_CHECKING, Literal, Self, Unpack
+from urllib.parse import unquote
 
-import flask
-from flask_restx import Namespace as OriginalNamespace
-from flask_restx.utils import merge, unpack
-from marshmallow.base import FieldABC
-from typing_extensions import override
-from webargs.flaskparser import parser
-from webargs.multidictproxy import MultiDictProxy
-from werkzeug import exceptions as http_exceptions
+from docstring_parser import parse_from_object
+from flask_restx.namespace import Namespace as OriginalNamespace
+from marshmallow.constants import missing
+from webargs.flaskparser import FlaskParser, is_json_request
+from werkzeug.exceptions import BadRequest
 
+from ._json import json
+from .enum import Location
 from .parameter import Parameters
-from .schema import DefaultHTTPErrorSchema, Model, Schema, StandardSchema
-from .util import API_DEFAULT_HTTP_CODE_MESSAGES
+from .schema import Schema
+from .type import ResourceRoute, Success, TupleResponse
+from .util import (
+    Request,
+    Response,
+    class_schema,
+    make_default_schema,
+    raise_validation_error,
+    security_helper,
+    unpack,
+)
+
+if TYPE_CHECKING:
+    from flask.views import MethodView
+
+    from .type import DataclassInstance, SchemaInitKwargs
+
+parser = FlaskParser(error_handler=raise_validation_error)  # type: ignore[assignment]
+
+
+@parser.location_loader("auto")
+def load_data(request: "Request", params: "Parameters") -> "dict":
+    """Load data from locations.
+
+    Args:
+        request (Request): request
+        params (Parameters): parameters
+
+    Raises:
+        BadRequest: if request is not JSON
+
+    Returns:
+        MultiDictProxy: json data
+    """
+    data = {}
+    if "body" in params.locations:
+        if is_json_request(request) is False:
+            raise BadRequest(description="Invalid JSON body.")
+        data.update(json.loads(request.get_data(cache=True)))
+    for field, location, is_multiple in params.field_locations:
+        match location:
+            case "path":
+                data[field] = (
+                    missing
+                    if request.view_args is None
+                    else unquote(value)
+                    if (value := request.view_args.get(field))
+                    else missing
+                )
+            case "formData":
+                data[field] = (
+                    [
+                        unquote(value) if value else missing
+                        for value in request.form.getlist(field)
+                    ]
+                    or request.files.getlist(field)
+                    if is_multiple
+                    else unquote(_data)
+                    if (_data := request.form.get(field))
+                    else missing or request.files.get(field, missing)
+                )
+            case "query":
+                values = [unquote(value) for value in request.args.getlist(field)] or [
+                    missing,
+                ]
+                data[field] = values if is_multiple else values[0]
+            case "header":
+                values = [
+                    unquote(value) for value in request.headers.getlist(field)
+                ] or [missing]
+                data[field] = values if is_multiple else values[0]
+            case "cookie":
+                values = [
+                    unquote(value) for value in request.cookies.getlist(field)
+                ] or [missing]
+                data[field] = values if is_multiple else values[0]
+    return data
 
 
 class Namespace(OriginalNamespace):
-    """
-    Author: 1746104160
-    msg: Patched Namespace
-    """
+    """Patched Namespace."""
 
-    def _handle_api_doc(self, cls: Model, doc: dict) -> None:
-        cls.__apidoc__ = (
-            None if doc is False else merge(getattr(cls, "__apidoc__", {}), doc)
-        )
+    if TYPE_CHECKING:
+        name: str
+        description: str | None
+        models: Mapping[str, Schema]
+        resources: list[ResourceRoute]
 
-    @override
-    def model(
-        self,
-        name: Optional[str] = None,
-        model: Optional[Schema] = None,
-        mask: Optional[str] = None,
-        strict=False,
-        **kwargs,
-    ) -> Model:
-        """Model registration decorator.
+    def security[A, S: str | Mapping[str, list[str] | str], M: "MethodView", **P](
+        self: Self,
+        security: S | Sequence[S],
+    ) -> Callable[
+        [Callable[P, TupleResponse[A] | Response | A] | type[M]],
+        Callable[P, TupleResponse[A] | Response | A] | type[M],
+    ]:
+        """Endpoint security decorator.
 
         Args:
-            name (str, optional): model name. Defaults to None.
-            model (Schema, optional): model instance. Defaults to None.
-            mask (str, optional): mask info. Defaults to None.
-            strict (bool, optional): whether strict. Defaults to False.
+            security (S | Sequence[S]): security name or instance.
 
         Returns:
-            Model: model instance
-        """
-        if isinstance(
-            model,
-            (Schema, FieldABC),
-        ):
-            if name is None:
-                name = model.__class__.__name__
-            api_model: Model = Model(name, model, mask=mask, strict=strict)
-            api_model.__apidoc__ = kwargs
-            return self.add_model(name, api_model)
-        return super().model(
-            name=name, model=model, mask=mask, strict=strict, **kwargs
+            (((((...) -> (TupleResponse | Response | Any)) | subclass[MethodView])) -> (((...) -> (TupleResponse | Response | Any)) | subclass[MethodView])): decorator.
+        """  # noqa: E501
+        security_ = (
+            [security_helper(security)]
+            if not isinstance(security, Sequence)
+            else [security_helper(s) for s in security]
         )
 
-    def parameters(
-        self,
-        params: Parameters,
-        *,
-        locations: Optional[list[str]] = None,
-        location: Optional[str] = None,
-        as_kwargs: bool = False,
-    ):
-        """Endpoint parameters registration decorator.
-
-        Args:
-            params (Parameters): parameters
-            locations (list[str], optional): locations in `query|header|formData|body|cookie`.
-            Defaults to None.
-            location (str, optional): location in `query|header|formData|body|cookie`.
-            Defaults to None.
-            as_kwargs (bool, optional): whether set parameters as keyword arguments or not.
-            Defaults to False.
-        """
-
-        def decorator(func: FunctionType):
-            """decorator
+        def decorator(
+            func_or_class: Callable[P, TupleResponse[A] | Response | A] | type[M],
+        ) -> Callable[P, TupleResponse[A] | Response | A] | type[M]:
+            """Decorator.
 
             Args:
-                func (FunctionType): function to decorate
-            """
-            assert location or locations
-            if locations is not None:
-                assert set(locations) <= {
-                    "query",
-                    "header",
-                    "formData",
-                    "body",
-                    "cookie",
-                }
+                func_or_class (((...) -> (TupleResponse | Response | Any)) | subclass[MethodView]): function or class to decorate.
 
-                @parser.location_loader("_and_".join(locations))
-                def load_data(
-                    request: flask.Request, schema: Parameters
-                ) -> MultiDictProxy:
-                    """load data from locations
-
-                    Args:
-                        request (flask.Request): request instance
-                        schema (Parameters): parameters
-
-                    Returns:
-                        MultiDictProxy: json data
-                    """
-                    new_data: dict = {}
-                    for location in locations:
-                        match location:
-                            case "body":
-                                try:
-                                    new_data.update(
-                                        request.get_json(
-                                            force=True, silent=True
-                                        )
-                                    )
-                                except TypeError:
-                                    pass
-                            case "formData":
-                                new_data.update(
-                                    {
-                                        key: value
-                                        if len(value) > 1
-                                        else value[0]
-                                        for key, value in request.form.lists()
-                                    }
-                                )
-                                new_data.update(
-                                    {
-                                        key: value
-                                        if len(value) > 1
-                                        else value[0]
-                                        for key, value in request.files.lists()
-                                    }
-                                )
-                            case "query":
-                                new_data.update(request.args)
-                            case "header":
-                                new_data.update(request.headers)
-                            case "cookie":
-                                new_data.update(request.cookies)
-                    return MultiDictProxy(new_data, schema)
-
-                load_data.__name__ = "load_data_from_" + "_and_".join(locations)
-                return self.doc(params=params)(
-                    self.response(code=HTTPStatus.UNPROCESSABLE_ENTITY)(
-                        parser.use_args(
-                            params,
-                            location="_and_".join(locations),
-                            as_kwargs=as_kwargs,
-                        )(func)
-                    )
-                )
-            assert location in {
-                "query",
-                "header",
-                "formData",
-                "body",
-                "cookie",
-            }
-            location2webargs_location = {
-                "query": "query",
-                "header": "headers",
-                "formData": "form",
-                "body": "json",
-                "cookie": "cookies",
-            }
-            return self.doc(params=params)(
-                self.response(code=HTTPStatus.UNPROCESSABLE_ENTITY)(
-                    parser.use_args(
-                        params,
-                        location=location2webargs_location[location],
-                        as_kwargs=as_kwargs,
-                    )(func)
-                )
-            )
+            Returns:
+                ((...) -> (TupleResponse | Response | Any)) | subclass[MethodView]) -> (((...) -> (TupleResponse | Response | Any)) | subclass[MethodView]) : decorated function or class.
+            """  # noqa: E501
+            if not isinstance(func_or_class, type):
+                # * function case
+                return self.doc(security=security_)(func_or_class)
+            # * class case
+            func_or_class.decorators.append(self.doc(security=security_))
+            return func_or_class
 
         return decorator
 
-    @override
-    def response(
-        self,
-        code: HTTPStatus = HTTPStatus.OK,
-        description: Optional[str] = None,
-        model: Optional[Schema | StandardSchema] = None,
+    def parameters[A, T: "DataclassInstance", M: "MethodView", **P](
+        self: Self,
+        params: "type[DataclassInstance | Parameters] | Parameters",
         *,
-        name: Optional[str] = None,
-        message: str = "ok",
-        **_kwargs,
-    ):
+        location: Location
+        | Literal["query", "header", "formData", "body", "cookie", "path"]
+        | None = None,
+        as_kwargs: bool = False,
+        validate: "Callable[[dict], bool] | None" = None,
+        **kwargs: Unpack["SchemaInitKwargs"],
+    ) -> Callable[
+        [Callable[P, TupleResponse[A] | Response | A] | type[M]],
+        Callable[P, TupleResponse[A] | Response | A] | type[M],
+    ]:
+        """Endpoint parameters registration decorator.
+
+        Args:
+            params (subclass[DataclassInstance | Parameters] | Parameters): parameters class or instance.
+            as_kwargs (bool, optional): whether set parameters as key word arguments
+                arguments or not. Defaults to False.
+            validate ((dict) -> bool, optional): validation function. Defaults to None.
+            location (Location, optional): location of the parameters. Defaults to None.
+            **kwargs (ParamsInitKwargs): parameters initialization keyword.
+
+        Raises:
+            TypeError: if params is not subclass of Parameters
+
+        Returns:
+            (((((...) -> (TupleResponse | Response | Any)) | subclass[MethodView])) -> (((...) -> (TupleResponse | Response | Any)) | subclass[MethodView])): decorator.
+
+
+        """  # noqa: E501
+        if is_dataclass(params):
+            params = class_schema(params, base=Parameters, use_origin_load=as_kwargs)
+        if isinstance(params, type) and issubclass(params, Parameters):
+            params = params(location=location, **kwargs)
+        elif not isinstance(params, Parameters):
+            msg = f"params must be subclass of Parameters, got {type(params).__name__}"
+            raise TypeError(msg)
+
+        def decorator(
+            func_or_class: Callable[P, TupleResponse[A] | Response | A] | type[M],
+        ) -> Callable[P, TupleResponse[A] | Response | A] | type[M]:
+            """Decorator.
+
+            Args:
+                func_or_class (((...) -> (TupleResponse | Response | Any)) | subclass[MethodView]): function or class to decorate.
+
+            Raises:
+                ValueError: if location is None.
+
+            Returns:
+                ((...) -> (TupleResponse | Response | Any)) | subclass[MethodView]) -> (((...) -> (TupleResponse | Response | Any)) | subclass[MethodView]) : decorated function or class.
+            """  # noqa: E501
+            locations = params.locations
+            if None in locations:
+                msg = f"location must be specified, {params} has None location."
+                raise ValueError(msg)
+            if not isinstance(func_or_class, type):
+                # * function case
+                return parser.use_args(
+                    params,
+                    location="auto",
+                    as_kwargs=as_kwargs,
+                    validate=validate,
+                )(self.doc(params=params)(func_or_class))
+            # * class case
+            func_or_class.decorators.append(
+                parser.use_args(
+                    params,
+                    location="auto",
+                    as_kwargs=as_kwargs,
+                    validate=validate,
+                )(self.doc(params=params)),
+            )
+            return func_or_class
+
+        return decorator
+
+    def responses[A, T: "DataclassInstance", M: "MethodView", **P](  # noqa: C901
+        self: Self,
+        *,
+        success: bool = True,
+        code: HTTPStatus | int = HTTPStatus.OK,
+        schema: "type[T | Schema] | Schema | None" = None,
+        message: str | None = None,
+        headers: Iterable[str] | None = None,
+        **kwargs: Unpack["SchemaInitKwargs"],
+    ) -> Callable[
+        [Callable[P, TupleResponse[A] | Response | A] | type[M]],
+        Callable[P, TupleResponse[A] | Response | A] | type[M],
+    ]:
         """Endpoint response OpenAPI documentation decorator.
 
         Args:
-            code (HTTPStatus, optional): http status code. Defaults to HTTPStatus.OK.
-            description (str, optional): description. Defaults to None.
-            model (Schema | StandardSchema | DefaultHTTPErrorSchema, optional): model
-            instance. Defaults to None.
-            name (str, optional):model name. Defaults to None.
-            message (str, optional): message. Defaults to "ok".
-        """
-        code = HTTPStatus(code)
-        description = (
-            API_DEFAULT_HTTP_CODE_MESSAGES[code]
-            if description is None
-            else description
-        )
-        model = (
-            model
-            if model
-            else StandardSchema(message)
-            if code == HTTPStatus.OK
-            else DefaultHTTPErrorSchema(http_code=code)
-            if code != HTTPStatus.NO_CONTENT
-            else None
-        )
-        name = name if code == HTTPStatus.OK else f"HTTPError{code}"
+            success (bool, optional): whether response is successful or not. Defaults to True.
+            code (HTTPStatus | int, optional): response status code. Defaults to HTTPStatus.OK.
+            message (str, optional): response message. Defaults to None.
+            schema (subclass[DataclassInstance | Schema] | Schema, optional): schema class or instance.
+            headers (Iterable[str], optional): header fields. Defaults to None.
+            **kwargs (SchemaInitKwargs): schema initialization keyword arguments.
 
-        def response_serializer_decorator(func: FunctionType):
-            """handles responses to serialize the returned value with the model
+        Raises:
+            TypeError: if schema is not subclass of Schema.
+
+        Returns:
+           (((((...) -> (TupleResponse | Response | Any)) | subclass[MethodView])) -> (((...) -> (TupleResponse | Response | Any)) | subclass[MethodView])): decorator.
+        """  # noqa: E501
+        if is_dataclass(schema):
+            schema = class_schema(schema, base=Schema)
+        if isinstance(schema, type) and issubclass(schema, Schema):
+            schema = schema(header_fields=headers, **kwargs)
+        elif not isinstance(schema, Schema) and schema is not None:
+            msg = f"schema must be subclass of Schema, got {type(schema).__name__}"
+            raise TypeError(msg)
+
+        def decorator(
+            func_or_class: Callable[P, TupleResponse[A] | Response | A] | type[M],
+        ) -> Callable[P, TupleResponse[A] | Response | A] | type[M]:
+            """Decorator.
 
             Args:
-                func (FunctionType): function to be called
-            """
+                func_or_class (((...) -> (TupleResponse | Response | Any)) | subclass[MethodView]): function or class to decorate.
 
-            def dump_wrapper(*args, **kwargs):
-                response = func(*args, **kwargs)
-
-                extra_headers: None = None
-                if isinstance(response, flask.Response) or model is None:
-                    return response
-                if isinstance(response, tuple):
-                    response, _code, extra_headers = unpack(response)
-                else:
-                    _code = code
-
-                if HTTPStatus(_code) is code:
-                    response = model.dump(response)
-                return response, _code, extra_headers
-
-            return dump_wrapper
-
-        def decorator(func_or_class):
-            if code.value in http_exceptions.default_exceptions:
-                decorated_func_or_class = func_or_class
-            elif isinstance(func_or_class, type):
-                # pylint: disable=protected-access
-                func_or_class._apply_decorator_to_methods(
-                    response_serializer_decorator
+            Returns:
+                ((...) -> (TupleResponse | Response | Any)) | subclass[MethodView]) -> (((...) -> (TupleResponse | Response | Any)) | subclass[MethodView]) : decorated function or class.
+            """  # noqa: E501
+            if schema is None:
+                splits = func_or_class.__qualname__.split(".")
+                name = f"{''.join(s.capitalize() for s in splits)}Schema"
+                schema_ = make_default_schema(
+                    name,
+                    success=success,
+                    code=code,
+                    message=message,
+                )(**kwargs)
+                doc = parse_from_object(func_or_class)
+                schema_.description = (
+                    doc.long_description or doc.short_description or schema_.description
                 )
-                decorated_func_or_class = func_or_class
             else:
-                decorated_func_or_class = wraps(func_or_class)(
-                    response_serializer_decorator(func_or_class)
+                schema_ = schema
+                name = type(schema_).__name__
+                doc = parse_from_object(schema_)
+                schema_.description = (
+                    doc.long_description or doc.short_description or schema_.description
                 )
-            api_model = (
-                model
-                if not model or isinstance(model, Model)
-                else self.model(model=model, name=name)
+            body_schema = schema_.copy_body_fields()
+            header_schema = schema_.copy_header_fields()
+            if not isinstance(func_or_class, type):
+                # * function case
+
+                @wraps(func_or_class)
+                def wrapper(
+                    *args: P.args,
+                    **kwargs: P.kwargs,
+                ) -> TupleResponse[A] | Response | A:
+                    """Wrapper.
+
+                    Args:
+                        *args (P.args): arguments
+                        **kwargs (P.kwargs): key word arguments
+
+                    Returns:
+                        TupleResponse | Response | Any: response
+                    """
+                    resp = func_or_class(*args, **kwargs)
+                    extra_headers = {}
+
+                    if isinstance(resp, Response):
+                        return resp
+                    if isinstance(resp, tuple):
+                        response, status_code, extra_headers = unpack(resp)
+                    else:
+                        response = Success(result=resp)
+                        status_code = HTTPStatus.OK
+                    if HTTPStatus(status_code) is HTTPStatus(code):
+                        response = body_schema.dump(response)
+                        extra_headers = header_schema.dump(extra_headers)
+                    return TupleResponse(
+                        response=response,
+                        status_code=status_code,
+                        extra_headers=extra_headers,
+                    )
+
+                return self.doc(responses={str(HTTPStatus(code)): schema_})(wrapper)
+            func_or_class.decorators.append(
+                self.doc(responses={str(HTTPStatus(code)): schema_}),
             )
-            if getattr(model, "many", False):
-                api_model = [api_model]
-            return self.doc(responses={code.value: (description, api_model)})(
-                decorated_func_or_class
-            )
+            return func_or_class
 
         return decorator

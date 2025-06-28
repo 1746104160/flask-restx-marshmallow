@@ -1,13 +1,9 @@
 {
     "recommendations": [
-        "ms-python.black-formatter",
-        "njpwerner.autodocstring",
-        "ms-python.isort",
-        "obkoro1.korofileheader",
-        "shd101wyy.markdown-preview-enhanced",
-        "ms-python.vscode-pylance",
-        "ms-python.pylint",
+        "samuelcolvin.jinjahtml",
+        "tamasfe.even-better-toml",
         "ms-python.python",
-        "ms-python.mypy-type-checker"
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff"
     ]
 }
